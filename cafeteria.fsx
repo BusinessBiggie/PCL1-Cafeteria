@@ -127,10 +127,66 @@ type OrderProductMsg =
     | OrderFruit of Fruit * qty:int
     | LeaveComment of string
 
+
 let gtgAgent = MailboxProcessor<OrderProductMsg>.Start(fun inbox ->
     let rec loop () = async {
-        //Part 3
-        return ()
+        let! msg = inbox.Receive()
+
+        match msg with
+
+        | OrderDrink (drink, qty) ->
+            let basePrice  = calculateDrinkPrice drink
+            let unitPrice  =
+                match drink with
+                | Coffee _ -> gtgVAT basePrice
+                | _        -> float basePrice
+
+            let totalPrice = unitPrice * float qty
+
+            let drinkDesc =
+                match drink with
+                | Coffee (variety, info) ->
+                    sprintf "%A coffee (%A)" variety info.Size
+                | Tea (variety, info) ->
+                    sprintf "%A tea (%A)" variety info.Size
+                | Juice variety -> sprintf "%A juice"  variety
+                | Milk  variety -> sprintf "%A milk"   variety
+                | Soda  variety -> sprintf "%A soda"   variety
+
+            printfn "Please pay DKK %.2f for your %d %s. Thanks!"
+                totalPrice qty drinkDesc
+
+        | OrderFood (food, qty) ->
+            let totalPrice = calculateFoodPrice food * qty
+            printfn "Please pay DKK %d for your %d %A. Enjoy your meal!"
+                totalPrice qty food
+
+        | OrderFruit (fruit, qty) ->
+            let totalPrice = calculateFruitPrice fruit * qty
+            printfn "Please pay DKK %d for your %d %A. Stay healthy!"
+                totalPrice qty fruit
+
+        | LeaveComment comment ->
+            printfn "Thanks for your comment: \"%s\" — We really appreciate your feedback!" comment
+
+        return! loop ()
     }
     loop ()
 )
+
+
+gtgAgent.Post(OrderDrink(Coffee(Latte,  { Size = Large  }), 2))
+
+gtgAgent.Post(OrderDrink(Coffee(Espresso, { Size = Small }), 1))
+
+gtgAgent.Post(OrderDrink(Tea(Green, { Size = Medium }), 3))
+
+gtgAgent.Post(OrderDrink(Soda Pepsi, 1))
+
+gtgAgent.Post(OrderFood(Sandwich, 2))
+
+gtgAgent.Post(OrderFruit(Grapes, 3))
+
+gtgAgent.Post(LeaveComment "The coffee was absolutely amazing today!")
+
+System.Threading.Thread.Sleep(500)

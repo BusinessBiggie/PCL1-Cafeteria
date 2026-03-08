@@ -1,4 +1,4 @@
-//Drinks
+//Drinks DU
 type Size = Small | Medium | Large
 
 type CoffeeType = Espresso | Latte | Cappuccino | Americano | Filter
@@ -7,10 +7,12 @@ type JuiceType = Orange | Apple | Multifruit | Exotic
 type MilkType = Skummet | Mini | Let
 type SodaType = Fanta | Pepsi | Sprite | FaxeKondi
 
+//Record
 type DrinkInfo = { 
     Size: Size 
 }
 
+//Drink DU
 type Drink = 
     | Coffee of CoffeeType * DrinkInfo
     | Tea of TeaType * DrinkInfo
@@ -18,14 +20,14 @@ type Drink =
     | Milk of MilkType //No sizes as they come in bottles
     | Soda of SodaType //No sizes as they come in bottles
 
-//Food
+//Food DUs
 type Food = Sandwich | Pastry | Salad
 type Fruit = Grapes | Banana | Pear
 
 
 let getDrinkBasePrice drink =
     match drink with
-    | Coffee (variety, _) -> 
+    | Coffee (variety, _) ->  //ignore size for base price, as it will be added later
         match variety with
         | Espresso   -> 15
         | Latte      -> 25
@@ -102,8 +104,10 @@ printfn "Coffee: %A - Price: %int DKK" myCoffeeOrder coffeePrice
 printfn "Milk: %A - Price: %int DKK" myMilkOrder milkPrice
 
 //SPRINT 2
+//Payment DUs
 type PaymentType = Cash | Card | MobilePay | ApplePay | GooglePay
 
+//Record for customers
 type Customer = {
     Id: int
     Name: string

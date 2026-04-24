@@ -1,192 +1,140 @@
-//Drinks DU
+open System
+
 type Size = Small | Medium | Large
+type CoffeeVariety = Espresso | Latte | Cappuccino
+type MilkType = Skummet | Mini | Let | OatMilk | SoyMilk
 
-type CoffeeType = Espresso | Latte | Cappuccino | Americano | Filter
-type TeaType = Green | Black | Herbal | Oolong | Rooibus
-type JuiceType = Orange | Apple | Multifruit | Exotic
-type MilkType = Skummet | Mini | Let
-type SodaType = Fanta | Pepsi | Sprite | FaxeKondi
+type PaymentMethod = 
+    | ViaCard 
+    | CreditCard 
+    | MobilePay 
+    | Cash
 
-//Record
-type DrinkInfo = { 
-    Size: Size 
-}
-
-//Drink DU
-type Drink = 
-    | Coffee of CoffeeType * DrinkInfo
-    | Tea of TeaType * DrinkInfo
-    | Juice of JuiceType //No sizes as they come in bottles
-    | Milk of MilkType //No sizes as they come in bottles
-    | Soda of SodaType //No sizes as they come in bottles
-
-//Food DUs
-type Food = Sandwich | Pastry | Salad
-type Fruit = Grapes | Banana | Pear
-
-
-let getDrinkBasePrice drink =
-    match drink with
-    | Coffee (variety, _) ->  //ignore size for base price, as it will be added later
-        match variety with
-        | Espresso   -> 15
-        | Latte      -> 25
-        | Cappuccino -> 25 
-        | Americano  -> 20 
-        | Filter     -> 12
-
-    | Tea (variety, _) ->
-        match variety with
-        | Green    -> 15
-        | Black    -> 15
-        | Herbal   -> 14
-        | Oolong   -> 18
-        | Rooibus  -> 13
-
-    | Juice variety ->
-        match variety with
-        | Orange     -> 15
-        | Apple      -> 15
-        | Multifruit -> 18
-        | Exotic     -> 18
-
-    | Milk variety ->
-        match variety with
-        | Skummet -> 10
-        | Mini    -> 10
-        | Let     -> 10
-
-    | Soda variety ->
-        match variety with
-        | Fanta     -> 15
-        | Pepsi     -> 20
-        | Sprite    -> 18
-        | FaxeKondi -> 15
-
-let applyDrinkSize size price =
-    match size with
-    | Small  -> price
-    | Medium -> price + 5
-    | Large  -> price + 10
-
-let calculateDrinkPrice (drink: Drink) =
-    match drink with
-    | Coffee (_, info)
-    | Tea (_, info) ->
-        getDrinkBasePrice drink
-        |> applyDrinkSize info.Size
-
-    | Juice _
-    | Milk _
-    | Soda _ ->
-        getDrinkBasePrice drink
-
-
-let calculateFoodPrice food =
-    match food with
-    | Sandwich -> 45
-    | Pastry   -> 20
-    | Salad    -> 35
-
-let calculateFruitPrice fruit =
-    match fruit with
-    | Grapes | Banana | Pear -> 5
-
-
-
-let myCoffeeOrder = Coffee(Latte, { Size = Large })
-let myMilkOrder   = Milk(Skummet)
-
-let coffeePrice = myCoffeeOrder |> calculateDrinkPrice
-let milkPrice   = myMilkOrder   |> calculateDrinkPrice
-
-printfn "Coffee: %A - Price: %int DKK" myCoffeeOrder coffeePrice
-printfn "Milk: %A - Price: %int DKK" myMilkOrder milkPrice
-
-//SPRINT 2
-//Payment DUs
-type PaymentType = Cash | Card | MobilePay | ApplePay | GooglePay
-
-//Record for customers
 type Customer = {
     Id: int
     Name: string
     Email: string
-    Phone: string
 }
 
-let gtgVAT (x: int) =
-    let percentage = 0.25
-    float x + (float x * percentage)
+type CoffeeRecord = { 
+    Variety: CoffeeVariety 
+    Size: Size 
+    Milk: MilkType 
+}
 
-printfn "Price with VAT: %.2f DKK" (gtgVAT coffeePrice)
+type JuiceRecord = { 
+    Flavor: string 
+    IsIceCold: bool 
+}
 
-type OrderProductMsg = 
-    | OrderDrink of Drink * qty:int 
-    | OrderFood of Food * qty:int
-    | OrderFruit of Fruit * qty:int
+type MilkRecord = {
+    Type: MilkType
+    Size: Size
+}
+
+type Drink = 
+    | Coffee of CoffeeRecord
+    | Juice of JuiceRecord
+    | Milk of MilkRecord 
+
+let getBasePrice drink =
+    match drink with
+    | Coffee c ->
+        match c.Variety with
+        | Espresso -> 15.0
+        | Latte | Cappuccino -> 25.0
+    | Juice _ -> 18.0
+    | Milk m -> 
+        match m.Type with
+        | OatMilk | SoyMilk -> 15.0
+        | _ -> 10.0
+
+let applySizePremium size price =
+    match size with
+    | Small -> price
+    | Medium -> price + 5.0
+    | Large -> price + 10.0
+
+let applyMilkPremium milk price =
+    match milk with
+    | OatMilk | SoyMilk -> price + 7.0
+    | _ -> price
+
+let calculateDrinkPrice drink =
+    match drink with
+    | Coffee c -> 
+        getBasePrice drink 
+        |> applySizePremium c.Size 
+        |> applyMilkPremium c.Milk
+    | Juice _ -> 
+        getBasePrice drink
+    | Milk m -> 
+        getBasePrice drink 
+        |> applySizePremium m.Size 
+
+let gtgVAT n x = x + (x * float n / 100.0)
+
+type Order = {
+    Customer: Customer
+    Drink: Drink
+    Quantity: int
+    Payment: PaymentMethod
+}
+
+type OrderMsg = 
+    | ProcessOrder of Order
     | LeaveComment of string
 
-
-let gtgAgent = MailboxProcessor<OrderProductMsg>.Start(fun inbox ->
+let gtgAgent = MailboxProcessor<OrderMsg>.Start(fun inbox ->
     let rec loop () = async {
         let! msg = inbox.Receive()
-
+        
         match msg with
+        | ProcessOrder order ->
+            let pricePerUnit = calculateDrinkPrice order.Drink
+            let finalPrice = gtgVAT 25 pricePerUnit
+            let total = finalPrice * float order.Quantity
+            
+            printfn "--- New Order ---"
+            printfn "Customer: %s (ID: %d)" order.Customer.Name order.Customer.Id
+            
+            match order.Drink with
+            | Coffee c -> 
+                printfn "Item: Coffee { Variety = %A; Size = %A; Milk = %A }" c.Variety c.Size c.Milk
+            | Juice j -> 
+                printfn "Item: Juice { Flavor = %s; IsIceCold = %b }" j.Flavor j.IsIceCold
+            | Milk m -> 
+                printfn "Item: Milk { Type = %A; Size = %A }" m.Type m.Size
 
-        | OrderDrink (drink, qty) ->
-            let basePrice  = calculateDrinkPrice drink
-            let unitPrice  =
-                match drink with
-                | Coffee _ -> gtgVAT basePrice
-                | _        -> float basePrice
+            printfn "Payment Method: %A" order.Payment
+            printfn "Total Amount: DKK %.2f" total
+            printfn "-----------------"
 
-            let totalPrice = unitPrice * float qty
-
-            let drinkDesc =
-                match drink with
-                | Coffee (variety, info) ->
-                    sprintf "%A coffee (%A)" variety info.Size
-                | Tea (variety, info) ->
-                    sprintf "%A tea (%A)" variety info.Size
-                | Juice variety -> sprintf "%A juice"  variety
-                | Milk  variety -> sprintf "%A milk"   variety
-                | Soda  variety -> sprintf "%A soda"   variety
-
-            printfn "Please pay DKK %.2f for your %d %s. Thanks!"
-                totalPrice qty drinkDesc
-
-        | OrderFood (food, qty) ->
-            let totalPrice = calculateFoodPrice food * qty
-            printfn "Please pay DKK %d for your %d %A. Enjoy your meal!"
-                totalPrice qty food
-
-        | OrderFruit (fruit, qty) ->
-            let totalPrice = calculateFruitPrice fruit * qty
-            printfn "Please pay DKK %d for your %d %A. Stay healthy!"
-                totalPrice qty fruit
-
-        | LeaveComment comment ->
-            printfn "Thanks for your comment: \"%s\" — We really appreciate your feedback!" comment
-
+        | LeaveComment c -> 
+            printfn "Feedback received: %s" c
+            
         return! loop ()
     }
     loop ()
 )
 
+let studentUser = { Id = 101; Name = "Anders"; Email = "and@via.dk" }
 
-gtgAgent.Post(OrderDrink(Coffee(Latte,  { Size = Large  }), 2))
+let oatLatte = {
+    Customer = studentUser
+    Drink = Coffee { Variety = Latte; Size = Large; Milk = OatMilk }
+    Quantity = 1
+    Payment = MobilePay
+}
 
-gtgAgent.Post(OrderDrink(Coffee(Espresso, { Size = Small }), 1))
+let plainOatMilk = {
+    Customer = studentUser
+    Drink = Milk { Type = OatMilk; Size = Large }
+    Quantity = 1
+    Payment = ViaCard
+}
 
-gtgAgent.Post(OrderDrink(Tea(Green, { Size = Medium }), 3))
+gtgAgent.Post(ProcessOrder(oatLatte))
+gtgAgent.Post(ProcessOrder(plainOatMilk))
 
-gtgAgent.Post(OrderDrink(Soda Pepsi, 1))
-
-gtgAgent.Post(OrderFood(Sandwich, 2))
-
-gtgAgent.Post(OrderFruit(Grapes, 3))
-
-gtgAgent.Post(LeaveComment "The coffee was absolutely amazing today!")
-
-System.Threading.Thread.Sleep(500)
+System.Threading.Thread.Sleep(1000)
